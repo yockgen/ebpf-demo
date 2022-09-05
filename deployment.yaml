@@ -1,0 +1,124 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: test01-v1
+  labels:
+    app: test01
+    version: v1
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: test01
+      version: v1 
+  template:
+    metadata:            
+      labels:
+        app: test01
+        version: v1
+    spec:	
+      containers:
+      - name: test01pod
+        command: ["/bin/sleep","3650d"]
+        image: yockgen/tools
+        securityContext:
+          capabilities:
+            add: ["NET_ADMIN", "SYS_TIME","NET_RAW"]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: test01-v2
+  labels:
+    app: test01
+    version: v2
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: test01
+      version: v2 
+  template:
+    metadata:            
+      labels:
+        app: test01
+        version: v2
+    spec:	
+      containers:
+      - name: test01pod
+        command: ["/bin/sleep","3650d"]
+        image: yockgen/tools
+        securityContext:
+          capabilities:
+            add: ["NET_ADMIN", "SYS_TIME","NET_RAW"]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: bpf-svc
+  labels:
+    app: bpf-svc
+    service: bpf-svc
+spec:
+  ports:
+  - port: 5001
+    targetPort: 5001
+    protocol: TCP
+  selector:
+    app: test01
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  name: bpf-istio-rule
+spec:
+  host: bpf-svc 
+  subsets:
+    - name: v1
+      labels:
+        version: v1
+    - name: v2
+      labels:
+        version: v2
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: Gateway
+metadata:
+  name: bpf-istio-gateway
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+  - port:
+      number: 31400
+      name: tcp
+      protocol: TCP
+    hosts:
+    - "*"
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: bpf-istio-vs
+spec:
+  hosts:
+  - "*"
+  gateways:
+  - bpf-istio-gateway
+  tcp:
+  - match:
+    - port: 31400
+    route:
+    - destination:
+        host: bpf-svc 
+        port:
+          number: 5001
+        subset: v1
+      weight: 50
+    - destination:
+        host: bpf-svc 
+        port:
+          number: 5001
+        subset: v2
+      weight: 50
+
